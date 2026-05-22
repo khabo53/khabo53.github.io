@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 
 const MembershipPage: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
@@ -36,29 +39,53 @@ const MembershipPage: React.FC = () => {
     }
 
     try {
-      console.log("📤 Sending registration request:", formData);
+      console.log("📤 Creating user in Firebase Auth:", formData.email);
 
-      const response = await fetch("http://localhost:5000/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+      // 1️⃣ Create user in Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
+
+      const user = userCredential.user;
+      console.log("✅ User created in Auth:", user.uid);
+
+      // 2️⃣ Store additional user data in Firestore (name, role, etc.)
+      await setDoc(doc(db, "users", user.uid), {
+        name: formData.name,
+        email: formData.email,
+        role: "member",        // Default role
+        plan: "free",          // Default plan
+        createdAt: new Date().toISOString(),
       });
 
-      const data = await response.json();
-      console.log("📥 Server response:", data);
+      console.log("✅ User data saved to Firestore");
 
-      if (response.ok) {
-        alert("🎉 Membership created successfully!");
-        setFormData({ name: "", email: "", password: "" });
-
-        // ✅ Redirect after success
-        navigate("/ScholarshipsPage"); // Change this to your desired page
-      } else {
-        alert(`❌ Failed to create membership: ${data.error || "Unknown error"}`);
+      alert("🎉 Membership created successfully! Please log in.");
+      
+      // Clear form and redirect to login page
+      setFormData({ name: "", email: "", password: "" });
+      setShowForm(false);
+      navigate("/login");
+      
+    } catch (error: any) {
+      console.error("❌ Registration error:", error.code, error.message);
+      
+      // User-friendly error messages
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          alert("This email is already registered. Please login instead.");
+          break;
+        case 'auth/weak-password':
+          alert("Password is too weak. Please use a stronger password.");
+          break;
+        case 'auth/invalid-email':
+          alert("Invalid email address format.");
+          break;
+        default:
+          alert(`Registration failed: ${error.message}`);
       }
-    } catch (error) {
-      console.error("🔥 Network or server error:", error);
-      alert("⚠️ Could not connect to the server. Please check if the backend is running.");
     } finally {
       setLoading(false);
     }
@@ -113,7 +140,7 @@ const MembershipPage: React.FC = () => {
               disabled={loading}
               className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-semibold"
             >
-              {loading ? "Submitting..." : "Sign Up"}
+              {loading ? "Creating Account..." : "Sign Up"}
             </button>
             <p className="text-center text-sm text-gray-600">
               Already have an account?{" "}

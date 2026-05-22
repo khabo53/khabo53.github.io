@@ -4,13 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"nodemon basotho-backend/server.js\"",
+    "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "tsc": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "scrape": "node scripts/scrape.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -44,8 +45,9 @@
     "@supabase/supabase-js": "^2.49.4",
     "@tanstack/react-query": "^5.56.2",
     "@types/uuid": "^10.0.0",
+    "axios": "^1.16.1",
     "bcrypt": "^6.0.0",
-    "cheerio": "^1.1.2",
+    "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
@@ -54,7 +56,7 @@
     "embla-carousel-react": "^8.3.0",
     "express": "^5.1.0",
     "firebase": "^12.3.0",
-    "firebase-admin": "^13.5.0",
+    "firebase-admin": "^13.10.0",
     "highlight.js": "^11.9.0",
     "input-otp": "^1.2.4",
     "lucide-react": "^0.462.0",

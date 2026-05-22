@@ -19,49 +19,38 @@ const LoginPage: React.FC = () => {
     try {
       console.log("🔑 Attempting login with:", formData.email);
 
-      // 1️⃣ Sign in with Firebase (client-side auth)
+      // Sign in with Firebase (client-side auth - no backend needed)
       const userCredential = await signInWithEmailAndPassword(
         auth,
         formData.email,
         formData.password
       );
 
-      // 2️⃣ Get Firebase ID token securely
-      const idToken = await userCredential.user.getIdToken();
-
-      // 3️⃣ Send token to backend for verification
-      const response = await fetch("http://localhost:5000/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }), // ✅ only send token
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "Login failed");
-      }
-
-      const data = await response.json();
-      console.log("✅ Backend verified user:", data);
-
-      // ✅ Optionally store user info or token locally
-      localStorage.setItem("user", JSON.stringify(data));
-
-      // 4️⃣ Navigate based on plan or role
-      switch (data.user?.plan) {
-        case "admin":
-          navigate("/admin/dashboard");
+      console.log("✅ Login successful:", userCredential.user.email);
+      
+      // Navigate to scholarships page after successful login
+      navigate("/scholarships");
+      
+    } catch (error: any) {
+      console.error("❌ Login error:", error.code, error.message);
+      
+      // User-friendly error messages
+      switch (error.code) {
+        case 'auth/user-not-found':
+          alert("No account found with this email. Please register first.");
           break;
-        case "premium":
-          navigate("/premium/home");
+        case 'auth/wrong-password':
+          alert("Incorrect password. Please try again.");
+          break;
+        case 'auth/invalid-email':
+          alert("Invalid email format.");
+          break;
+        case 'auth/too-many-requests':
+          alert("Too many failed attempts. Please try again later.");
           break;
         default:
-          navigate("/scholarships");
-          break;
+          alert(`Login failed: ${error.message}`);
       }
-    } catch (error: any) {
-      console.error("❌ Login error:", error.message);
-      alert(`Login failed: ${error.message}`);
     } finally {
       setLoading(false);
     }
