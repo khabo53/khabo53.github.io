@@ -47,17 +47,7 @@ const HeroSection: React.FC = () => {
              Basotho Solutions – Your Opportunity Hub for Growth and Impact.
           </p>
           {/*<div className="space-x-4">*/}
-          <div className="flex flex-wrap justify-center gap-4">
-            
-            <button  onClick={() => navigate('/membership')}
-             className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-semibold transition-all transform hover:scale-105 shadow-lg">
-              Join as a Member
-            </button>
-            <button  onClick={() => navigate('/scholarships')}
-            className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-green-600 px-6 py-3 rounded-full font-semibold transition-all">
-              Explore Opportunities
-            </button>
-          </div>
+         
         </div>
       </div>
     </section>
