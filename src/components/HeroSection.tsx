@@ -48,32 +48,11 @@ const HeroSection: React.FC = () => {
           </p>
           {/*<div className="space-x-4">*/}
           <div className="flex flex-wrap justify-center gap-4">
-            {/* <Link
-              to="/membership"
-              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-semibold transition-all transform hover:scale-105 shadow-lg"
-            >
-              Join as a Member
-            </Link>
-            <Link
-              to="/consulting"
-              className="bg-white text-green-700 border-2 border-white hover:bg-green-100 px-6 py-3 rounded-full font-semibold transition-all"
-            >
-              Book Consulting
-            </Link>
-            <Link
-              to="/scholarships"
-              className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-green-600 px-6 py-3 rounded-full font-semibold transition-all"
-            >
-              Explore Scholarships
-            </Link> */}
-            <button  onClick={() => navigate('/login')}
+            
+            <button  onClick={() => navigate('/membership')}
              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-semibold transition-all transform hover:scale-105 shadow-lg">
               Join as a Member
             </button>
-            {/*<button  onClick={() => navigate('/consulting')}
-             className="bg-white text-green-700 border-2 border-white hover:bg-green-100 px-6 py-3 rounded-full font-semibold transition-all">
-              Book Consulting
-            </button>*/}
             <button  onClick={() => navigate('/scholarships')}
             className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-green-600 px-6 py-3 rounded-full font-semibold transition-all">
               Explore Opportunities

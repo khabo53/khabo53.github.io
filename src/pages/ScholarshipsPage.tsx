@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
+import Header from "../components/Header";
 
 interface Item {
   title: string;
@@ -36,7 +37,6 @@ const ScholarshipsPage: React.FC = () => {
     return new Date(timestamp).toLocaleString();
   };
 
-  // ✅ Fetch opportunities from Firestore
   const fetchOpportunitiesFromFirestore = async () => {
     setLoading(true);
     try {
@@ -60,28 +60,18 @@ const ScholarshipsPage: React.FC = () => {
           category: item.category || "",
         });
         
-        // ✅ Handle Firestore Timestamp safely
         if (item.createdAt) {
           try {
             let itemDate: Date;
-            
-            // Check if it's a Firestore Timestamp with toDate method
             if (typeof item.createdAt.toDate === 'function') {
               itemDate = item.createdAt.toDate();
-            } 
-            // Check if it's already a Date
-            else if (item.createdAt instanceof Date) {
+            } else if (item.createdAt instanceof Date) {
               itemDate = item.createdAt;
-            } 
-            // Check if it's a string
-            else if (typeof item.createdAt === 'string') {
+            } else if (typeof item.createdAt === 'string') {
               itemDate = new Date(item.createdAt);
-            } 
-            // Fallback
-            else {
+            } else {
               itemDate = new Date();
             }
-            
             if (!latestTimestamp || itemDate > latestTimestamp) {
               latestTimestamp = itemDate;
             }
@@ -93,7 +83,6 @@ const ScholarshipsPage: React.FC = () => {
       
       console.log(`📥 Fetched ${allOpportunities.length} opportunities`);
       
-      // Categorize automatically
       const scholarships = allOpportunities.filter(
         (item) =>
           item.category?.toLowerCase() === "scholarship" ||
@@ -130,7 +119,6 @@ const ScholarshipsPage: React.FC = () => {
     }
   };
 
-  // ✅ Manual refresh (re-fetch from Firestore)
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -143,14 +131,13 @@ const ScholarshipsPage: React.FC = () => {
     }
   };
 
-  // ✅ Auto-refresh every 5 minutes
   useEffect(() => {
     fetchOpportunitiesFromFirestore();
     
     const interval = setInterval(() => {
       console.log("⏳ Auto refreshing from Firestore...");
       handleRefresh();
-    }, 300000); // 5 minutes
+    }, 300000);
     
     return () => clearInterval(interval);
   }, []);
@@ -159,16 +146,13 @@ const ScholarshipsPage: React.FC = () => {
     if (loading) return <p className="text-gray-600">Loading...</p>;
     
     if (!Array.isArray(items)) {
-      console.error("❌ Items is not an array:", items);
       return <p className="text-gray-600">No data available.</p>;
     }
     
-    // Apply search filter
     const filteredItems = items.filter((item) =>
       item.title?.toLowerCase().includes(searchQuery.toLowerCase())
     );
     
-    // Sort by date (newest first)
     const sortedItems = [...filteredItems].sort((a: any, b: any) => {
       const dateA = new Date(a.date || 0).getTime();
       const dateB = new Date(b.date || 0).getTime();
@@ -178,7 +162,6 @@ const ScholarshipsPage: React.FC = () => {
     if (sortedItems.length === 0)
       return <p className="text-gray-600">No results found.</p>;
     
-    // Display in rows and columns
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-fr">
         {sortedItems.map((item, idx) => (
@@ -213,68 +196,66 @@ const ScholarshipsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white-100 p-6">
-      <div className="w-full h-screen bg-white p-6">
-        <div className="max-w-4xl mx-auto bg-white shadow-md rounded-lg p-6">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold">Opportunities</h2>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-all"
-            >
-              {refreshing ? "Refreshing..." : "🔄 Refresh"}
-            </button>
-          </div>
-          
-          {/* Last Updated */}
-          {lastUpdated && (
-            <p className="text-sm text-gray-500 mb-4">
-              📅 Last updated: <span className="font-medium">{lastUpdated}</span>
-            </p>
-          )}
-          
-          {/* Tabs */}
-          <div className="flex space-x-4 border-b mb-4">
-            {["scholarships", "fellowships", "jobs"].map((tab) => (
+    <>
+      <Header />
+      <div className="min-h-screen bg-white-100 p-6">
+        <div className="w-full h-screen bg-white p-6">
+          <div className="max-w-4xl mx-auto bg-white shadow-md rounded-lg p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Opportunities</h2>
               <button
-                key={tab}
-                onClick={() => {
-                  setActiveTab(tab as typeof activeTab);
-                  setSearchQuery("");
-                }}
-                className={`pb-2 px-3 font-medium ${
-                  activeTab === tab
-                    ? "border-b-2 border-green-600 text-green-600"
-                    : "text-gray-600 hover:text-green-600"
-                }`}
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-all"
               >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {refreshing ? "Refreshing..." : "🔄 Refresh"}
               </button>
-            ))}
-          </div>
-          
-          {/* Search Bar */}
-          <div className="mb-4">
-            <input
-              type="text"
-              placeholder={`Search ${activeTab}...`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 border rounded-md"
-            />
-          </div>
-          
-          {/* Content */}
-          <div>
-            {activeTab === "scholarships" && renderList(data.scholarships)}
-            {activeTab === "fellowships" && renderList(data.fellowships)}
-            {activeTab === "jobs" && renderList(data.jobs)}
+            </div>
+            
+            {lastUpdated && (
+              <p className="text-sm text-gray-500 mb-4">
+                📅 Last updated: <span className="font-medium">{lastUpdated}</span>
+              </p>
+            )}
+            
+            <div className="flex space-x-4 border-b mb-4">
+              {["scholarships", "fellowships", "jobs"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    setActiveTab(tab as typeof activeTab);
+                    setSearchQuery("");
+                  }}
+                  className={`pb-2 px-3 font-medium ${
+                    activeTab === tab
+                      ? "border-b-2 border-green-600 text-green-600"
+                      : "text-gray-600 hover:text-green-600"
+                  }`}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
+            
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder={`Search ${activeTab}...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 border rounded-md"
+              />
+            </div>
+            
+            <div>
+              {activeTab === "scholarships" && renderList(data.scholarships)}
+              {activeTab === "fellowships" && renderList(data.fellowships)}
+              {activeTab === "jobs" && renderList(data.jobs)}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
