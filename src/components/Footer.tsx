@@ -90,7 +90,10 @@ const Footer: React.FC = () => {
               </div>
               <div className="flex items-center">
                 <Mail className="w-5 h-5 mr-3 text-green-400" />
-                <span className="text-gray-300">basothosolutions@gmail.com</span>
+                <a href="mailto:info@basothosolutions.org.ls?subject=Website Inquiry&body=Hello, 
+                  I would like to know more about..." className="text-gray-300 hover:text-white transition-colors">
+                   info@basothosolutions.org.ls
+                </a>
               </div>
             </div>
           </div>
