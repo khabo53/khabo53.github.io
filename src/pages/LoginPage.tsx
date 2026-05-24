@@ -1,12 +1,16 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Define admin emails
+  const adminEmails = ["info@basothosolutions.org.ls"]; 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -19,7 +23,6 @@ const LoginPage: React.FC = () => {
     try {
       console.log("🔑 Attempting login with:", formData.email);
 
-      // Sign in with Firebase (client-side auth - no backend needed)
       const userCredential = await signInWithEmailAndPassword(
         auth,
         formData.email,
@@ -27,14 +30,42 @@ const LoginPage: React.FC = () => {
       );
 
       console.log("✅ Login successful:", userCredential.user.email);
-      
-      // Navigate to scholarships page after successful login
-      navigate("/scholarships");
+
+      const userDocRef = doc(db, "users", userCredential.user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        // Check if this email is admin
+        const isAdmin = adminEmails.includes(userCredential.user.email || "");
+        
+        await setDoc(userDocRef, {
+          name: userCredential.user.email?.split('@')[0] || "User",
+          email: userCredential.user.email,
+          role: isAdmin ? "admin" : "member",
+          createdAt: new Date().toISOString()
+        });
+        
+        console.log(`User created with role: ${isAdmin ? "admin" : "member"}`);
+        
+        if (isAdmin) {
+          navigate("/admin");
+        } else {
+          navigate("/scholarships");
+        }
+      } else {
+        const userData = userDoc.data();
+        console.log("Existing user role:", userData?.role);
+        
+        if (userData?.role === "admin") {
+          navigate("/admin");
+        } else {
+          navigate("/scholarships");
+        }
+      }
       
     } catch (error: any) {
       console.error("❌ Login error:", error.code, error.message);
       
-      // User-friendly error messages
       switch (error.code) {
         case 'auth/user-not-found':
           alert("No account found with this email. Please register first.");
