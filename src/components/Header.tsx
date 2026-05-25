@@ -1,52 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Menu, X, User, LogOut } from 'lucide-react';
 import { useNavigate, useLocation } from "react-router-dom";
-import { auth, db } from "../firebase";
+import { auth } from "../firebase";
+import { useAuth } from "../contexts/AuthContext"; 
 import { signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
 
 const Header: React.FC = () => { 
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, userName, userEmail, userRole, loading } = useAuth(); // ← Get everything from AuthContext
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [userName, setUserName] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const isAdmin = userRole === 'admin';
 
   // Pages where header should NOT be shown
   const noHeaderPaths = ["/login", "/membership"];
   const showHeader = !noHeaderPaths.includes(location.pathname);
-
-  // Get current user info
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        setUserEmail(user.email);
-        
-        // Get user role from Firestore
-        try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setUserName(userData.name || user.email?.split('@')[0] || "User");
-            setIsAdmin(userData.role === "admin");
-          } else {
-            setUserName(user.email?.split('@')[0] || "User");
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          setUserName(user.email?.split('@')[0] || "User");
-        }
-      } else {
-        setUserName(null);
-        setUserEmail(null);
-        setIsAdmin(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -62,6 +31,26 @@ const Header: React.FC = () => {
   // If on login or membership page, don't render header
   if (!showHeader) {
     return null;
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <header className="bg-gradient-to-r from-green-600 to-blue-600 text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center cursor-pointer" onClick={() => navigate('/')}>
+              <img
+                src="https://pbs.twimg.com/profile_images/1935214019440152576/qXWVglEh_400x400.png"
+                alt="Basotho Solutions Logo"
+                className="h-14 w-14 rounded-full"
+              />
+              <span className="ml-2 text-sm opacity-90">Basotho Solutions</span>
+            </div>
+          </div>
+        </div>
+      </header>
+    );
   }
 
   return (
@@ -99,22 +88,22 @@ const Header: React.FC = () => {
 
           {/* User Section / Login Button */}
           <div className="relative">
-            {userName ? (
+            {user ? (
               <div className="relative">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 rounded-full px-4 py-2 transition-colors"
                 >
                   <User className="w-4 h-4" />
-                  <span className="text-sm font-medium">{userName}</span>
+                  <span className="text-sm font-medium">{userName || user.email?.split('@')[0]}</span>
                 </button>
                 
                 {/* Dropdown Menu */}
                 {showUserMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white text-gray-800 rounded-lg shadow-lg overflow-hidden z-50">
                     <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="text-sm font-semibold">{userName}</p>
-                      <p className="text-xs text-gray-500 truncate">{userEmail}</p>
+                      <p className="text-sm font-semibold">{userName || user.email?.split('@')[0]}</p>
+                      <p className="text-xs text-gray-500 truncate">{userEmail || user.email}</p>
                     </div>
                     <button
                       onClick={handleLogout}
@@ -203,7 +192,7 @@ const Header: React.FC = () => {
                 </button>
               )}
               
-              {!userName && (
+              {!user && (
                 <>
                   <button
                     onClick={() => {
@@ -226,7 +215,7 @@ const Header: React.FC = () => {
                 </>
               )}
               
-              {userName && (
+              {user && (
                 <button
                   onClick={() => {
                     handleLogout();

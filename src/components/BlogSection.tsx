@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, MapPin, Briefcase } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useNavigate } from 'react-router-dom';
+
 
 interface BlogPost {
   id: string;
@@ -17,9 +18,10 @@ interface BlogPost {
   applyUrl?: string;
   createdAt: string;
 }
-const navigate = useNavigate();
+
 
 const BlogSection: React.FC = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'all' | 'blog' | 'vacancy'>('all');
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
