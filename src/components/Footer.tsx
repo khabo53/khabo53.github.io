@@ -125,7 +125,7 @@ const Footer: React.FC = () => {
         {/* COPYRIGHT */}
         <div className="border-t border-gray-700 mt-8 pt-8 text-center">
           <p className="text-gray-300">
-            © 2023 Basotho Solutions. All rights reserved. Building opportunities for a sustainable future.
+            © 2025 Basotho Solutions. All rights reserved. Building opportunities for a sustainable future.
           </p>
         </div>
 
