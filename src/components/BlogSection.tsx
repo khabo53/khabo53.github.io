@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, MapPin, Briefcase } from 'lucide-react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useNavigate } from 'react-router-dom';
 
 interface BlogPost {
   id: string;
@@ -16,6 +17,7 @@ interface BlogPost {
   applyUrl?: string;
   createdAt: string;
 }
+const navigate = useNavigate();
 
 const BlogSection: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'all' | 'blog' | 'vacancy'>('all');
@@ -198,8 +200,7 @@ const BlogSection: React.FC = () => {
                     Apply Now
                   </a>
                 ) : (
-                  <button 
-                    onClick={() => window.location.href = `/blog/${post.id}`}
+                  <button onClick={() => navigate(`/blog/${post.id}`)}
                     className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md transition-colors"
                   >
                     Read More

@@ -1,10 +1,10 @@
 
+import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ThemeProvider } from "@/components/theme-provider";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 //  new pages
@@ -14,7 +14,9 @@ import ScholarshipsPage from "./pages/ScholarshipsPage";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import BlogPostPage from "./pages/BlogPostPage";
 import AdminPanel from "./components/AdminPanel";
+
 
 
 const queryClient = new QueryClient();
@@ -35,6 +37,7 @@ const App = () => (
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
             <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/blog/:id" element={<BlogPostPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
