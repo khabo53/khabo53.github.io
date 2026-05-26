@@ -1,10 +1,13 @@
+/* Remove the old root restrictions that were blocking scrolling */
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  /* Remove max-width and margin restrictions */
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
+/* Keep other styles but make them less restrictive */
 .logo {
   height: 6em;
   padding: 1.5em;
@@ -50,4 +53,11 @@
 
 .read-the-docs {
   color: #5f7676;
+}
+
+/* Add helper class for pages that need full height */
+.full-height-page {
+  min-height: 100vh;
+  height: auto;
+  display: block;
 }
