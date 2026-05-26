@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
 import Header from "../components/Header";
@@ -32,6 +32,7 @@ const ScholarshipsPage: React.FC = () => {
     "scholarships" | "fellowships" | "jobs"
   >("scholarships");
   const [searchQuery, setSearchQuery] = useState("");
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
@@ -40,7 +41,7 @@ const ScholarshipsPage: React.FC = () => {
   const fetchOpportunitiesFromFirestore = async () => {
     setLoading(true);
     try {
-      console.log("📥 Fetching opportunities from Firestore...");
+      console.log("Fetching opportunities from Firestore...");
       
       const opportunitiesRef = collection(db, "opportunities");
       const q = query(opportunitiesRef, orderBy("createdAt", "desc"));
@@ -81,7 +82,7 @@ const ScholarshipsPage: React.FC = () => {
         }
       });
       
-      console.log(`📥 Fetched ${allOpportunities.length} opportunities`);
+      console.log(`Fetched ${allOpportunities.length} opportunities`);
       
       const scholarships = allOpportunities.filter(
         (item) =>
@@ -113,7 +114,7 @@ const ScholarshipsPage: React.FC = () => {
       }
       
     } catch (error) {
-      console.error("❌ Firestore fetch error:", error);
+      console.error("Firestore fetch error:", error);
     } finally {
       setLoading(false);
     }
@@ -123,9 +124,9 @@ const ScholarshipsPage: React.FC = () => {
     setRefreshing(true);
     try {
       await fetchOpportunitiesFromFirestore();
-      console.log("🔄 Data refreshed from Firestore");
+      console.log("Data refreshed from Firestore");
     } catch (error) {
-      console.error("❌ Failed to refresh:", error);
+      console.error("Failed to refresh:", error);
     } finally {
       setRefreshing(false);
     }
@@ -135,12 +136,26 @@ const ScholarshipsPage: React.FC = () => {
     fetchOpportunitiesFromFirestore();
     
     const interval = setInterval(() => {
-      console.log("⏳ Auto refreshing from Firestore...");
+      console.log("Auto refreshing from Firestore...");
       handleRefresh();
     }, 300000);
     
     return () => clearInterval(interval);
   }, []);
+
+  // Scroll active tab into view on mobile
+  useEffect(() => {
+    if (tabsContainerRef.current) {
+      const activeTabElement = tabsContainerRef.current.querySelector('.tab-active');
+      if (activeTabElement) {
+        activeTabElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'center',
+        });
+      }
+    }
+  }, [activeTab]);
 
   const renderList = (items: Item[]) => {
     if (loading) return <p className="text-gray-600">Loading...</p>;
@@ -186,7 +201,7 @@ const ScholarshipsPage: React.FC = () => {
             
             {item.date && (
               <p className="text-sm text-gray-500">
-                📅 {new Date(item.date).toLocaleDateString()}
+                {new Date(item.date).toLocaleDateString()}
               </p>
             )}
           </a>
@@ -198,27 +213,36 @@ const ScholarshipsPage: React.FC = () => {
   return (
     <>
       <Header />
-      <div className="min-h-screen bg-white-100 p-6">
-        <div className="w-full h-screen bg-white p-6">
-          <div className="max-w-4xl mx-auto bg-white shadow-md rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">Opportunities</h2>
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-all"
-              >
-                {refreshing ? "Refreshing..." : "🔄 Refresh"}
-              </button>
-            </div>
-            
-            {lastUpdated && (
-              <p className="text-sm text-gray-500 mb-4">
-                📅 Last updated: <span className="font-medium">{lastUpdated}</span>
-              </p>
-            )}
-            
-            <div className="flex space-x-4 border-b mb-4">
+      <div className="min-h-screen bg-gray-100 p-4 md:p-6">
+        <div className="w-full max-w-7xl mx-auto bg-white shadow-md rounded-lg p-4 md:p-6">
+          {/* Header Section */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+            <h2 className="text-2xl font-bold text-gray-800">Opportunities</h2>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-all disabled:opacity-50 text-sm"
+            >
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+          
+          {lastUpdated && (
+            <p className="text-sm text-gray-500 mb-4">
+              Last updated: <span className="font-medium">{lastUpdated}</span>
+            </p>
+          )}
+          
+          {/* Modern Scrollable Tabs - Fixes Overflow on Mobile */}
+          <div 
+            ref={tabsContainerRef}
+            className="overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 mb-4 pb-2"
+            style={{
+              scrollbarWidth: 'thin',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
+            <div className="flex gap-1 min-w-max border-b border-gray-200">
               {["scholarships", "fellowships", "jobs"].map((tab) => (
                 <button
                   key={tab}
@@ -226,32 +250,53 @@ const ScholarshipsPage: React.FC = () => {
                     setActiveTab(tab as typeof activeTab);
                     setSearchQuery("");
                   }}
-                  className={`pb-2 px-3 font-medium ${
-                    activeTab === tab
-                      ? "border-b-2 border-green-600 text-green-600"
-                      : "text-gray-600 hover:text-green-600"
-                  }`}
+                  className={`
+                    px-4 md:px-6 py-3 font-medium whitespace-nowrap transition-all duration-200
+                    ${activeTab === tab
+                      ? "tab-active border-b-2 border-green-600 text-green-600"
+                      : "text-gray-600 hover:text-green-600 border-b-2 border-transparent hover:border-green-300"
+                    }
+                  `}
                 >
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {/* Optional: Add count badge */}
+                  <span className={`
+                    ml-2 px-2 py-0.5 text-xs rounded-full
+                    ${activeTab === tab 
+                      ? "bg-green-100 text-green-700" 
+                      : "bg-gray-100 text-gray-600"
+                    }
+                  `}>
+                    {activeTab === tab 
+                      ? (tab === "scholarships" ? data.scholarships.length :
+                         tab === "fellowships" ? data.fellowships.length :
+                         data.jobs.length)
+                      : (tab === "scholarships" ? data.scholarships.length :
+                         tab === "fellowships" ? data.fellowships.length :
+                         data.jobs.length)
+                    }
+                  </span>
                 </button>
               ))}
             </div>
-            
-            <div className="mb-4">
-              <input
-                type="text"
-                placeholder={`Search ${activeTab}...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md"
-              />
-            </div>
-            
-            <div>
-              {activeTab === "scholarships" && renderList(data.scholarships)}
-              {activeTab === "fellowships" && renderList(data.fellowships)}
-              {activeTab === "jobs" && renderList(data.jobs)}
-            </div>
+          </div>
+          
+          {/* Search Section */}
+          <div className="mb-6">
+            <input
+              type="text"
+              placeholder={`Search ${activeTab}...`}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+            />
+          </div>
+          
+          {/* Content Section */}
+          <div>
+            {activeTab === "scholarships" && renderList(data.scholarships)}
+            {activeTab === "fellowships" && renderList(data.fellowships)}
+            {activeTab === "jobs" && renderList(data.jobs)}
           </div>
         </div>
       </div>
