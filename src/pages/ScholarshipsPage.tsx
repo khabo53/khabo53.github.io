@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
 import Header from "../components/Header";
 
@@ -37,13 +37,13 @@ const ScholarshipsPage: React.FC = () => {
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
   };
 
   const fetchOpportunitiesFromFirestore = useCallback(async (isBackground = false) => {
-    // Don't show loading for background refreshes
     if (!isBackground) {
       setLoading(true);
     }
@@ -56,7 +56,6 @@ const ScholarshipsPage: React.FC = () => {
       const q = query(opportunitiesRef, orderBy("createdAt", "desc"));
       const querySnapshot = await getDocs(q);
       
-      // Check if component is still mounted before updating state
       if (!isMountedRef.current) return;
       
       const allOpportunities: Item[] = [];
@@ -140,7 +139,6 @@ const ScholarshipsPage: React.FC = () => {
   }, []);
 
   const handleRefresh = useCallback(async () => {
-    // Prevent multiple simultaneous refreshes
     if (refreshing) return;
     
     setRefreshing(true);
@@ -153,11 +151,9 @@ const ScholarshipsPage: React.FC = () => {
       console.error("Failed to refresh:", error);
       setError("Refresh failed. Pull down again to retry.");
     } finally {
-      // Clear any existing timer
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
       }
-      // Set minimum refresh time to prevent rapid refreshes
       refreshTimerRef.current = setTimeout(() => {
         if (isMountedRef.current) {
           setRefreshing(false);
@@ -166,31 +162,34 @@ const ScholarshipsPage: React.FC = () => {
     }
   }, [fetchOpportunitiesFromFirestore, refreshing]);
 
-  // Handle pull-to-refresh properly
+  // Handle pull-to-refresh without breaking normal scrolling
   useEffect(() => {
     let touchStartY = 0;
-    let touchStartTime = 0;
     let isRefreshing = false;
+    let isAtTop = true;
+    
+    const handleScroll = () => {
+      isAtTop = window.scrollY === 0;
+    };
     
     const handleTouchStart = (e: TouchEvent) => {
-      // Only enable pull-to-refresh at the very top of the page
       if (window.scrollY === 0) {
         touchStartY = e.touches[0].clientY;
-        touchStartTime = Date.now();
       }
     };
     
     const handleTouchMove = (e: TouchEvent) => {
+      // Only handle pull-to-refresh if we're at the top of the page
       if (window.scrollY === 0 && !isRefreshing && !refreshing) {
         const touchCurrentY = e.touches[0].clientY;
         const pullDistance = touchCurrentY - touchStartY;
         
-        // Only trigger if pulling down more than 80px
+        // Only trigger if pulling down significantly
         if (pullDistance > 80 && !isRefreshing) {
           isRefreshing = true;
+          e.preventDefault(); // Only prevent default when actually refreshing
           handleRefresh();
           
-          // Reset after refresh
           setTimeout(() => {
             isRefreshing = false;
           }, 2000);
@@ -198,38 +197,22 @@ const ScholarshipsPage: React.FC = () => {
       }
     };
     
+    window.addEventListener('scroll', handleScroll);
     document.addEventListener('touchstart', handleTouchStart, { passive: true });
     document.addEventListener('touchmove', handleTouchMove, { passive: false });
     
     return () => {
+      window.removeEventListener('scroll', handleScroll);
       document.removeEventListener('touchstart', handleTouchStart);
       document.removeEventListener('touchmove', handleTouchMove);
     };
   }, [handleRefresh, refreshing]);
-
-  // Prevent browser's default pull-to-refresh behavior
-  useEffect(() => {
-    const preventPullToRefresh = (e: TouchEvent) => {
-      // Only prevent when at the top of the page
-      if (window.scrollY === 0 && e.touches[0].clientY > 0 && e.cancelable) {
-        e.preventDefault();
-      }
-    };
-    
-    // Only add the listener if we want to fully control refresh
-    document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
-    
-    return () => {
-      document.removeEventListener('touchmove', preventPullToRefresh);
-    };
-  }, []);
 
   // Initial load
   useEffect(() => {
     isMountedRef.current = true;
     fetchOpportunitiesFromFirestore();
     
-    // Auto-refresh every 5 minutes
     const interval = setInterval(() => {
       if (isMountedRef.current && !refreshing) {
         console.log("Auto refreshing from Firestore...");
@@ -347,7 +330,11 @@ const ScholarshipsPage: React.FC = () => {
   return (
     <>
       <Header />
-      <div className="min-h-screen bg-gray-100 p-4 md:p-6">
+      <div 
+        ref={scrollContainerRef}
+        className="min-h-screen bg-gray-100 p-4 md:p-6"
+        style={{ overscrollBehavior: 'contain' }}
+      >
         <div className="w-full max-w-7xl mx-auto bg-white shadow-md rounded-lg p-4 md:p-6">
           {/* Refresh indicator for pull-to-refresh */}
           {refreshing && (
@@ -427,7 +414,7 @@ const ScholarshipsPage: React.FC = () => {
             />
           </div>
           
-          {/* Content Section */}
+          {/* Content Section - This area is now scrollable */}
           <div>
             {activeTab === "scholarships" && renderList(data.scholarships)}
             {activeTab === "fellowships" && renderList(data.fellowships)}
@@ -447,6 +434,17 @@ const ScholarshipsPage: React.FC = () => {
         }
         .animate-slideDown {
           animation: slideDown 0.3s ease-out;
+        }
+        
+        /* Ensure normal scrolling works */
+        body {
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        
+        /* Allow scroll on the main container */
+        .min-h-screen {
+          overflow-y: visible;
         }
       `}</style>
     </>
