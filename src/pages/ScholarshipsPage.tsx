@@ -37,7 +37,6 @@ const ScholarshipsPage: React.FC = () => {
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
@@ -162,53 +161,6 @@ const ScholarshipsPage: React.FC = () => {
     }
   }, [fetchOpportunitiesFromFirestore, refreshing]);
 
-  // Handle pull-to-refresh without breaking normal scrolling
-  useEffect(() => {
-    let touchStartY = 0;
-    let isRefreshing = false;
-    let isAtTop = true;
-    
-    const handleScroll = () => {
-      isAtTop = window.scrollY === 0;
-    };
-    
-    const handleTouchStart = (e: TouchEvent) => {
-      if (window.scrollY === 0) {
-        touchStartY = e.touches[0].clientY;
-      }
-    };
-    
-    const handleTouchMove = (e: TouchEvent) => {
-      // Only handle pull-to-refresh if we're at the top of the page
-      if (window.scrollY === 0 && !isRefreshing && !refreshing) {
-        const touchCurrentY = e.touches[0].clientY;
-        const pullDistance = touchCurrentY - touchStartY;
-        
-        // Only trigger if pulling down significantly
-        if (pullDistance > 80 && !isRefreshing) {
-          isRefreshing = true;
-          e.preventDefault(); // Only prevent default when actually refreshing
-          handleRefresh();
-          
-          setTimeout(() => {
-            isRefreshing = false;
-          }, 2000);
-        }
-      }
-    };
-    
-    window.addEventListener('scroll', handleScroll);
-    document.addEventListener('touchstart', handleTouchStart, { passive: true });
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      document.removeEventListener('touchstart', handleTouchStart);
-      document.removeEventListener('touchmove', handleTouchMove);
-    };
-  }, [handleRefresh, refreshing]);
-
-  // Initial load
   useEffect(() => {
     isMountedRef.current = true;
     fetchOpportunitiesFromFirestore();
@@ -229,7 +181,6 @@ const ScholarshipsPage: React.FC = () => {
     };
   }, [fetchOpportunitiesFromFirestore, refreshing]);
 
-  // Scroll active tab into view on mobile
   useEffect(() => {
     if (tabsContainerRef.current) {
       const activeTabElement = tabsContainerRef.current.querySelector('.tab-active');
@@ -330,20 +281,14 @@ const ScholarshipsPage: React.FC = () => {
   return (
     <>
       <Header />
-      <div 
-        ref={scrollContainerRef}
-        className="min-h-screen bg-gray-100 p-4 md:p-6"
-        style={{ overscrollBehavior: 'contain' }}
-      >
-        <div className="w-full max-w-7xl mx-auto bg-white shadow-md rounded-lg p-4 md:p-6">
-          {/* Refresh indicator for pull-to-refresh */}
+      <div className="bg-gray-100" style={{ minHeight: '100vh' }}>
+        <div className="w-full max-w-7xl mx-auto bg-white shadow-md rounded-lg p-4 md:p-6" style={{ marginTop: '20px', marginBottom: '20px' }}>
           {refreshing && (
             <div className="fixed top-0 left-0 right-0 bg-green-500 text-white text-center py-2 z-50 animate-slideDown">
               Refreshing opportunities...
             </div>
           )}
           
-          {/* Header Section */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
             <h2 className="text-2xl font-bold text-gray-800">Opportunities</h2>
             <button
@@ -361,7 +306,6 @@ const ScholarshipsPage: React.FC = () => {
             </p>
           )}
           
-          {/* Modern Scrollable Tabs */}
           <div 
             ref={tabsContainerRef}
             className="overflow-x-auto overflow-y-hidden mb-4 pb-2"
@@ -403,7 +347,6 @@ const ScholarshipsPage: React.FC = () => {
             </div>
           </div>
           
-          {/* Search Section */}
           <div className="mb-6">
             <input
               type="text"
@@ -414,7 +357,6 @@ const ScholarshipsPage: React.FC = () => {
             />
           </div>
           
-          {/* Content Section - This area is now scrollable */}
           <div>
             {activeTab === "scholarships" && renderList(data.scholarships)}
             {activeTab === "fellowships" && renderList(data.fellowships)}
@@ -434,17 +376,6 @@ const ScholarshipsPage: React.FC = () => {
         }
         .animate-slideDown {
           animation: slideDown 0.3s ease-out;
-        }
-        
-        /* Ensure normal scrolling works */
-        body {
-          overflow-y: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-        
-        /* Allow scroll on the main container */
-        .min-h-screen {
-          overflow-y: visible;
         }
       `}</style>
     </>
