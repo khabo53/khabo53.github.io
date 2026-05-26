@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from "react";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { db } from "../firebase";
 import Header from "../components/Header";
 
@@ -32,20 +32,32 @@ const ScholarshipsPage: React.FC = () => {
     "scholarships" | "fellowships" | "jobs"
   >("scholarships");
   const [searchQuery, setSearchQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  
   const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
   };
 
-  const fetchOpportunitiesFromFirestore = async () => {
-    setLoading(true);
+  const fetchOpportunitiesFromFirestore = useCallback(async (isBackground = false) => {
+    // Don't show loading for background refreshes
+    if (!isBackground) {
+      setLoading(true);
+    }
+    setError(null);
+    
     try {
       console.log("Fetching opportunities from Firestore...");
       
       const opportunitiesRef = collection(db, "opportunities");
       const q = query(opportunitiesRef, orderBy("createdAt", "desc"));
       const querySnapshot = await getDocs(q);
+      
+      // Check if component is still mounted before updating state
+      if (!isMountedRef.current) return;
       
       const allOpportunities: Item[] = [];
       let latestTimestamp: Date | null = null;
@@ -82,6 +94,8 @@ const ScholarshipsPage: React.FC = () => {
         }
       });
       
+      if (!isMountedRef.current) return;
+      
       console.log(`Fetched ${allOpportunities.length} opportunities`);
       
       const scholarships = allOpportunities.filter(
@@ -115,33 +129,122 @@ const ScholarshipsPage: React.FC = () => {
       
     } catch (error) {
       console.error("Firestore fetch error:", error);
+      if (isMountedRef.current) {
+        setError("Failed to load opportunities. Please check your connection and try again.");
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current && !isBackground) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
+    // Prevent multiple simultaneous refreshes
+    if (refreshing) return;
+    
     setRefreshing(true);
+    setError(null);
+    
     try {
-      await fetchOpportunitiesFromFirestore();
+      await fetchOpportunitiesFromFirestore(true);
       console.log("Data refreshed from Firestore");
     } catch (error) {
       console.error("Failed to refresh:", error);
+      setError("Refresh failed. Pull down again to retry.");
     } finally {
-      setRefreshing(false);
+      // Clear any existing timer
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+      // Set minimum refresh time to prevent rapid refreshes
+      refreshTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setRefreshing(false);
+        }
+      }, 1000);
     }
-  };
+  }, [fetchOpportunitiesFromFirestore, refreshing]);
 
+  // Handle pull-to-refresh properly
   useEffect(() => {
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let isRefreshing = false;
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      // Only enable pull-to-refresh at the very top of the page
+      if (window.scrollY === 0) {
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+      }
+    };
+    
+    const handleTouchMove = (e: TouchEvent) => {
+      if (window.scrollY === 0 && !isRefreshing && !refreshing) {
+        const touchCurrentY = e.touches[0].clientY;
+        const pullDistance = touchCurrentY - touchStartY;
+        
+        // Only trigger if pulling down more than 80px
+        if (pullDistance > 80 && !isRefreshing) {
+          isRefreshing = true;
+          handleRefresh();
+          
+          // Reset after refresh
+          setTimeout(() => {
+            isRefreshing = false;
+          }, 2000);
+        }
+      }
+    };
+    
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [handleRefresh, refreshing]);
+
+  // Prevent browser's default pull-to-refresh behavior
+  useEffect(() => {
+    const preventPullToRefresh = (e: TouchEvent) => {
+      // Only prevent when at the top of the page
+      if (window.scrollY === 0 && e.touches[0].clientY > 0 && e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    
+    // Only add the listener if we want to fully control refresh
+    document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
+    
+    return () => {
+      document.removeEventListener('touchmove', preventPullToRefresh);
+    };
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    isMountedRef.current = true;
     fetchOpportunitiesFromFirestore();
     
+    // Auto-refresh every 5 minutes
     const interval = setInterval(() => {
-      console.log("Auto refreshing from Firestore...");
-      handleRefresh();
+      if (isMountedRef.current && !refreshing) {
+        console.log("Auto refreshing from Firestore...");
+        fetchOpportunitiesFromFirestore(true);
+      }
     }, 300000);
     
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, [fetchOpportunitiesFromFirestore, refreshing]);
 
   // Scroll active tab into view on mobile
   useEffect(() => {
@@ -158,10 +261,24 @@ const ScholarshipsPage: React.FC = () => {
   }, [activeTab]);
 
   const renderList = (items: Item[]) => {
-    if (loading) return <p className="text-gray-600">Loading...</p>;
+    if (loading && !refreshing) return <p className="text-gray-600 text-center py-8">Loading opportunities...</p>;
+    
+    if (error) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={handleRefresh}
+            className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition-all"
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
     
     if (!Array.isArray(items)) {
-      return <p className="text-gray-600">No data available.</p>;
+      return <p className="text-gray-600 text-center py-8">No data available.</p>;
     }
     
     const filteredItems = items.filter((item) =>
@@ -174,14 +291,27 @@ const ScholarshipsPage: React.FC = () => {
       return dateB - dateA;
     });
     
-    if (sortedItems.length === 0)
-      return <p className="text-gray-600">No results found.</p>;
+    if (sortedItems.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-gray-600">No results found for "{searchQuery}".</p>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="mt-2 text-green-600 hover:text-green-700 underline"
+            >
+              Clear search
+            </button>
+          )}
+        </div>
+      );
+    }
     
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-fr">
         {sortedItems.map((item, idx) => (
           <a
-            key={idx}
+            key={`${item.link}-${idx}`}
             href={item.originalLink || item.link}
             target="_blank"
             rel="noopener noreferrer"
@@ -192,6 +322,10 @@ const ScholarshipsPage: React.FC = () => {
                 src={item.image}
                 alt={item.title || "Opportunity image"}
                 className="w-full h-40 object-cover rounded-xl mb-3"
+                loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
               />
             )}
             
@@ -200,7 +334,7 @@ const ScholarshipsPage: React.FC = () => {
             </h2>
             
             {item.date && (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 mt-auto pt-2">
                 {new Date(item.date).toLocaleDateString()}
               </p>
             )}
@@ -215,6 +349,13 @@ const ScholarshipsPage: React.FC = () => {
       <Header />
       <div className="min-h-screen bg-gray-100 p-4 md:p-6">
         <div className="w-full max-w-7xl mx-auto bg-white shadow-md rounded-lg p-4 md:p-6">
+          {/* Refresh indicator for pull-to-refresh */}
+          {refreshing && (
+            <div className="fixed top-0 left-0 right-0 bg-green-500 text-white text-center py-2 z-50 animate-slideDown">
+              Refreshing opportunities...
+            </div>
+          )}
+          
           {/* Header Section */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
             <h2 className="text-2xl font-bold text-gray-800">Opportunities</h2>
@@ -233,10 +374,10 @@ const ScholarshipsPage: React.FC = () => {
             </p>
           )}
           
-          {/* Modern Scrollable Tabs - Fixes Overflow on Mobile */}
+          {/* Modern Scrollable Tabs */}
           <div 
             ref={tabsContainerRef}
-            className="overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 mb-4 pb-2"
+            className="overflow-x-auto overflow-y-hidden mb-4 pb-2"
             style={{
               scrollbarWidth: 'thin',
               WebkitOverflowScrolling: 'touch',
@@ -259,7 +400,6 @@ const ScholarshipsPage: React.FC = () => {
                   `}
                 >
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  {/* Optional: Add count badge */}
                   <span className={`
                     ml-2 px-2 py-0.5 text-xs rounded-full
                     ${activeTab === tab 
@@ -267,14 +407,9 @@ const ScholarshipsPage: React.FC = () => {
                       : "bg-gray-100 text-gray-600"
                     }
                   `}>
-                    {activeTab === tab 
-                      ? (tab === "scholarships" ? data.scholarships.length :
-                         tab === "fellowships" ? data.fellowships.length :
-                         data.jobs.length)
-                      : (tab === "scholarships" ? data.scholarships.length :
-                         tab === "fellowships" ? data.fellowships.length :
-                         data.jobs.length)
-                    }
+                    {tab === "scholarships" ? data.scholarships.length :
+                     tab === "fellowships" ? data.fellowships.length :
+                     data.jobs.length}
                   </span>
                 </button>
               ))}
@@ -300,6 +435,20 @@ const ScholarshipsPage: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      <style>{`
+        @keyframes slideDown {
+          from {
+            transform: translateY(-100%);
+          }
+          to {
+            transform: translateY(0);
+          }
+        }
+        .animate-slideDown {
+          animation: slideDown 0.3s ease-out;
+        }
+      `}</style>
     </>
   );
 };
