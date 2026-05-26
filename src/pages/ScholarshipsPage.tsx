@@ -37,12 +37,22 @@ const ScholarshipsPage: React.FC = () => {
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
   };
 
   const fetchOpportunitiesFromFirestore = useCallback(async (isBackground = false) => {
+    // Cancel any ongoing fetch
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Create new abort controller for this request
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
+    
     if (!isBackground) {
       setLoading(true);
     }
@@ -55,7 +65,8 @@ const ScholarshipsPage: React.FC = () => {
       const q = query(opportunitiesRef, orderBy("createdAt", "desc"));
       const querySnapshot = await getDocs(q);
       
-      if (!isMountedRef.current) return;
+      // Check if component is still mounted and not aborted
+      if (!isMountedRef.current || signal.aborted) return;
       
       const allOpportunities: Item[] = [];
       let latestTimestamp: Date | null = null;
@@ -71,7 +82,7 @@ const ScholarshipsPage: React.FC = () => {
           category: item.category || "",
         });
         
-        if (item.createdAt) {
+        if (item.createdAt && isMountedRef.current && !signal.aborted) {
           try {
             let itemDate: Date;
             if (typeof item.createdAt.toDate === 'function') {
@@ -92,7 +103,8 @@ const ScholarshipsPage: React.FC = () => {
         }
       });
       
-      if (!isMountedRef.current) return;
+      // Double-check mounted and not aborted before updating state
+      if (!isMountedRef.current || signal.aborted) return;
       
       console.log(`Fetched ${allOpportunities.length} opportunities`);
       
@@ -115,23 +127,32 @@ const ScholarshipsPage: React.FC = () => {
           item.title?.toLowerCase().includes("fellowship")
       );
       
-      setData({
-        scholarships,
-        fellowships,
-        jobs,
-      });
-      
-      if (latestTimestamp) {
-        setLastUpdated(formatTimestamp(latestTimestamp.toISOString()));
+      // Only update state if still mounted
+      if (isMountedRef.current && !signal.aborted) {
+        setData({
+          scholarships,
+          fellowships,
+          jobs,
+        });
+        
+        if (latestTimestamp) {
+          setLastUpdated(formatTimestamp(latestTimestamp.toISOString()));
+        }
       }
       
-    } catch (error) {
+    } catch (error: any) {
+      // Don't set error if it's an abort error (component unmounting)
+      if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
+        console.log("Fetch aborted due to component unmount");
+        return;
+      }
+      
       console.error("Firestore fetch error:", error);
-      if (isMountedRef.current) {
+      if (isMountedRef.current && !signal.aborted) {
         setError("Failed to load opportunities. Please check your connection and try again.");
       }
     } finally {
-      if (isMountedRef.current && !isBackground) {
+      if (isMountedRef.current && !signal.aborted && !isBackground) {
         setLoading(false);
       }
     }
@@ -146,9 +167,13 @@ const ScholarshipsPage: React.FC = () => {
     try {
       await fetchOpportunitiesFromFirestore(true);
       console.log("Data refreshed from Firestore");
-    } catch (error) {
-      console.error("Failed to refresh:", error);
-      setError("Refresh failed. Pull down again to retry.");
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') {
+        console.error("Failed to refresh:", error);
+        if (isMountedRef.current) {
+          setError("Refresh failed. Pull down again to retry.");
+        }
+      }
     } finally {
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
@@ -161,26 +186,56 @@ const ScholarshipsPage: React.FC = () => {
     }
   }, [fetchOpportunitiesFromFirestore, refreshing]);
 
+  // Handle browser refresh/page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Cancel any ongoing requests when page is about to refresh
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
+  // Initial load with safety timeout
   useEffect(() => {
     isMountedRef.current = true;
-    fetchOpportunitiesFromFirestore();
+    
+    // Small delay to ensure component is fully mounted
+    const timeoutId = setTimeout(() => {
+      if (isMountedRef.current) {
+        fetchOpportunitiesFromFirestore();
+      }
+    }, 100);
     
     const interval = setInterval(() => {
-      if (isMountedRef.current && !refreshing) {
+      if (isMountedRef.current && !refreshing && document.visibilityState === 'visible') {
         console.log("Auto refreshing from Firestore...");
         fetchOpportunitiesFromFirestore(true);
       }
-    }, 300000);
+    }, 300000); // 5 minutes
     
     return () => {
-      isMountedRef.current = false;
+      clearTimeout(timeoutId);
       clearInterval(interval);
+      isMountedRef.current = false;
+      
+      // Cancel any ongoing fetch on unmount
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
       }
     };
   }, [fetchOpportunitiesFromFirestore, refreshing]);
 
+  // Scroll active tab into view on mobile
   useEffect(() => {
     if (tabsContainerRef.current) {
       const activeTabElement = tabsContainerRef.current.querySelector('.tab-active');
