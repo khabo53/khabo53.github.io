@@ -136,6 +136,7 @@ async function scrapeSource(url) {
             title: text.slice(0, 200),
             link: href,
             originalLink: href,
+            postPageLink: href,
             image: '',
             date: '',
             description: '',
@@ -161,23 +162,31 @@ async function scrapeSource(url) {
     }
     
     // Parse each article found with the selector
-    articles.each((index, element) => {
+    for (const element of articles) {
       // Try to find title and link
       let title = $(element).find('h2 a, h3 a, .entry-title a, .post-title a, .title a').first().text().trim();
-      let link = $(element).find('h2 a, h3 a, .entry-title a, .post-title a, .title a').first().attr('href');
+      let postLink = $(element).find('h2 a, h3 a, .entry-title a, .post-title a, .title a').first().attr('href');
       
       // If not found in headings, try the first link
-      if (!link) {
-        link = $(element).find('a').first().attr('href');
+      if (!postLink) {
+        postLink = $(element).find('a').first().attr('href');
       }
-      if (!title && link) {
+      if (!title && postLink) {
         title = $(element).find('a').first().text().trim();
       }
       
       // Skip if missing essential data
-      if (!title || !link) return;
-      if (title.length < 10) return;
-      if (link === url || link.includes('#comments')) return;
+      if (!title || !postLink) continue;
+      if (title.length < 10) continue;
+      if (postLink === url || postLink.includes('#comments')) continue;
+      
+      // Resolve relative links for the post page
+      if (postLink && postLink.startsWith('/')) {
+        try {
+          const urlObj = new URL(url);
+          postLink = `${urlObj.protocol}//${urlObj.host}${postLink}`;
+        } catch (e) {}
+      }
       
       // Get date if available
       let date = $(element).find('.date, .post-date, .entry-date, time, .published, .meta-date').first().text().trim();
@@ -212,18 +221,97 @@ async function scrapeSource(url) {
       else if (urlLower.includes('job') || titleLower.includes('job') || titleLower.includes('vacancy')) category = 'job';
       else if (titleLower.includes('internship')) category = 'internship';
       
-      // Resolve relative links
-      if (link && link.startsWith('/')) {
-        try {
-          const urlObj = new URL(url);
-          link = `${urlObj.protocol}//${urlObj.host}${link}`;
-        } catch (e) {}
+      // 🔥 Extract the ORIGINAL link from the post page
+      let originalLink = postLink; // Default to the post page link
+      
+      try {
+        // Add a delay before visiting the post page to avoid rate limiting
+        await delay(1500 + Math.random() * 1500);
+        
+        console.log(`      🔗 Fetching original link from: ${postLink}`);
+        
+        const postResponse = await axios.get(postLink, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+          timeout: 15000
+        });
+        
+        const post$ = cheerio.load(postResponse.data);
+        
+        // Pattern 1: Look for "Apply Now" or "Visit Website" buttons
+        const applyButton = post$('a:contains("Apply"), a:contains("apply"), a:contains("Visit"), a:contains("visit"), a:contains("Website"), a:contains("website"), .btn, .button, .apply-now, .external-link').first();
+        if (applyButton.length > 0) {
+          const btnHref = applyButton.attr('href');
+          if (btnHref && btnHref.startsWith('http') && !btnHref.includes('opportunitiesforyouth')) {
+            originalLink = btnHref;
+            console.log(`      ✅ Found original link via button: ${originalLink}`);
+          }
+        }
+        
+        // Pattern 2: If no button found, look for external links in the content
+        if (originalLink === postLink) {
+          // Look for any external link in the post content
+          const externalLinks = post$('.entry-content a, .post-content a, article a');
+          for (const linkEl of externalLinks) {
+            const href = post$(linkEl).attr('href');
+            const text = post$(linkEl).text().trim();
+            
+            // Check if it's an external link (not the same domain)
+            if (href && href.startsWith('http') && !href.includes('opportunitiesforyouth')) {
+              // Prefer links with "Apply", "Website", "More Info" etc.
+              const keywords = ['apply', 'website', 'visit', 'more info', 'read more', 'official', 'here', 'link'];
+              const isRelevant = keywords.some(kw => text.toLowerCase().includes(kw));
+              
+              if (isRelevant) {
+                originalLink = href;
+                console.log(`      ✅ Found original link via content: ${originalLink}`);
+                break;
+              }
+              
+              // If no relevant keyword, take the first external link as fallback
+              if (originalLink === postLink) {
+                originalLink = href;
+                console.log(`      ℹ️ Using first external link: ${originalLink}`);
+              }
+            }
+          }
+        }
+        
+        // Pattern 3: Look for links in the excerpt/meta
+        if (originalLink === postLink) {
+          // Try to find a link in the post's metadata or excerpt
+          const metaLink = post$('.entry-meta a, .post-meta a, .meta a').last().attr('href');
+          if (metaLink && metaLink.startsWith('http') && !metaLink.includes('opportunitiesforyouth')) {
+            originalLink = metaLink;
+            console.log(`      ✅ Found original link via meta: ${originalLink}`);
+          }
+        }
+        
+        // Pattern 4: Look for the first external link in the entire post
+        if (originalLink === postLink) {
+          const allLinks = post$('a');
+          for (const linkEl of allLinks) {
+            const href = post$(linkEl).attr('href');
+            if (href && href.startsWith('http') && !href.includes('opportunitiesforyouth') && !href.includes('#')) {
+              originalLink = href;
+              console.log(`      ℹ️ Using fallback external link: ${originalLink}`);
+              break;
+            }
+          }
+        }
+        
+      } catch (error) {
+        console.log(`      ⚠️ Could not fetch original link: ${error.message}`);
+        // Keep the postLink as fallback
       }
       
       opportunities.push({
         title: title.slice(0, 200),
-        link: link,
-        originalLink: link,
+        link: originalLink, // ← This is now the ORIGINAL external link
+        originalLink: originalLink,
+        postPageLink: postLink, // ← Store the post page link for reference
         image: image || '',
         date: date || '',
         description: description || '',
@@ -231,9 +319,9 @@ async function scrapeSource(url) {
         source: url,
         scrapedAt: new Date().toISOString()
       });
-    });
+    }
     
-    // Remove duplicates by link
+    // Remove duplicates by link (now using the original link)
     const seenLinks = new Set();
     const unique = [];
     for (const opp of opportunities) {
@@ -243,7 +331,7 @@ async function scrapeSource(url) {
       }
     }
     
-    console.log(`   📊 Found ${unique.length} unique opportunities`);
+    console.log(`   📊 Found ${unique.length} unique opportunities with original links`);
     return unique.slice(0, 50);
     
   } catch (error) {
@@ -261,7 +349,7 @@ async function scrapeSource(url) {
 // Save opportunity to Firestore
 async function saveToFirestore(opportunity, sourceName) {
   try {
-    // Check if opportunity with same link already exists
+    // Check if opportunity with same original link already exists
     const existing = await db.collection('opportunities')
       .where('link', '==', opportunity.link)
       .limit(1)
@@ -274,8 +362,9 @@ async function saveToFirestore(opportunity, sourceName) {
     // Add new opportunity
     await db.collection('opportunities').add({
       title: opportunity.title,
-      link: opportunity.link,
+      link: opportunity.link, // ← This is the ORIGINAL external link
       originalLink: opportunity.originalLink,
+      postPageLink: opportunity.postPageLink || opportunity.link, // ← Store the post page
       image: opportunity.image,
       date: opportunity.date,
       description: opportunity.description,
@@ -309,12 +398,11 @@ async function scrapeOpportunities() {
   let totalScraped = 0;
   let totalAdded = 0;
   
-  // Sources to scrape - using category pages instead of search URLs
+  // Sources to scrape - using category pages
   const sources = [
     { name: 'fellowships', url: 'https://opportunitiesforyouth.org/category/fellowship/' },
-    // Try these additional URLs - uncomment if they work
-     { name: 'scholarships', url: 'https://opportunitiesforyouth.org/scholarships/' },
-     { name: 'jobs', url: 'https://opportunitiesforyouth.org/jobs/' },
+    { name: 'scholarships', url: 'https://opportunitiesforyouth.org/scholarships/' },
+    { name: 'jobs', url: 'https://opportunitiesforyouth.org/jobs/' },
   ];
   
   for (const source of sources) {
