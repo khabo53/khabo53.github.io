@@ -6,6 +6,7 @@ import Header from "../components/Header";
 interface Item {
   title: string;
   originalLink?: string;
+  postPageLink?: string;
   link: string;
   image?: string;
   date?: string;
