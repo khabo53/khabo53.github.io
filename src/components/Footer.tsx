@@ -5,6 +5,7 @@ import mgpiLogo from './Logos/mgpi.jpg';
 import artiscience from './Logos/Artiscience.jpg';
 import vaulte from './Logos/vaulte.jpeg';  
 import afriprime from './Logos/afriprime.jpeg'; 
+import investorlist from './Logos/investorlist.jpeg';
 
 const Footer: React.FC = () => {
   const partners = [
@@ -13,7 +14,7 @@ const Footer: React.FC = () => {
       { name: "Artiscience", logo: artiscience, url: 'https://articulatingscience.org/' },
       { name: "vaulte", logo: vaulte, url: 'https://www.vaulte-us.com/' },
       { name: "afriprime", logo: afriprime, url: 'https://linkfly.to/afriprime' },
-
+      {name: "investorlist", logo: investorlist, url: 'https://investorlist.com/' },
   ];
 
   return (
